@@ -50,24 +50,44 @@ More versions can be added as the official DSH main/preload code changes.
 ## Requirements
 
 - Windows (the scripts are PowerShell)
-- Node.js 20+
+- Node.js 20+ to **build** the core patch
 - Git for Windows (`git apply` is used to apply the diffs)
 - DSH installed and closed while installing
+
+> The normal `dsh-sidecar-browser` plugin does **not** require system Node; DSH
+> ships its own runtime. Node is only needed for this optional core patch.
 
 ```powershell
 npm install
 ```
 
+## Version matching
+
+Each directory under `patches/` is one exact DSH version. `patches/manifest.json`
+marks which versions are tested.
+
+The builder reads the installed archive's `package.json`, selects the matching
+directory automatically, and refuses unsupported or untested versions:
+
+```text
+patches/
+├── manifest.json
+└── 0.2.1-rc.3/
+    ├── main.patch
+    └── preload.patch
+```
+
 ## Build
 
-Point `--app-asar` at the installed DSH archive. The builder checks its
-`package.json` version against `--version` and refuses a mismatch.
+Point `--app-asar` at the installed DSH archive. Version detection is automatic:
 
 ```powershell
 node scripts/build.mjs `
-  --app-asar "E:\Tools\Deepseek_Harness\resources\app.asar" `
-  --version 0.2.1-rc.3
+  --app-asar "E:\Tools\Deepseek_Harness\resources\app.asar"
 ```
+
+You can still force a version for testing with `--version 0.2.1-rc.3`; a
+mismatch is rejected.
 
 Output:
 
@@ -79,6 +99,18 @@ dist/
 ```
 
 `BUILD.json` records the source archive, SHA-256, size and applied patches.
+
+## One-command update
+
+Pull the latest patch repository, detect the installed DSH version, build the
+matching patch, and install it:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update.ps1
+```
+
+Use `-NoPull` to build and install without pulling. The script closes DSH and
+creates a timestamped backup before installing.
 
 ## Install
 

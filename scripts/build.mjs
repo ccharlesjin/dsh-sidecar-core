@@ -28,16 +28,37 @@ function arg(name, fallback) {
 }
 
 const archive = path.resolve(arg('--app-asar', 'E:/Tools/Deepseek_Harness/resources/app.asar'));
-const version = String(arg('--version', '0.2.1-rc.3'));
+const requestedVersion = String(arg('--version', ''));
 const outDir = path.resolve(arg('--out', path.join(process.cwd(), 'dist')));
-const patchDir = path.resolve(process.cwd(), 'patches', version);
 
 if (!fs.existsSync(archive)) throw new Error(`app.asar not found: ${archive}`);
-if (!fs.existsSync(patchDir)) throw new Error(`no patches for version ${version}: ${patchDir}`);
 
 const packageJson = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8'));
+const version = requestedVersion || String(packageJson.version);
+const patchDir = path.resolve(process.cwd(), 'patches', version);
+
 if (String(packageJson.version) !== version) {
   throw new Error(`archive version is ${packageJson.version}, expected ${version}; refusing to apply a mismatched patch`);
+}
+if (!fs.existsSync(patchDir)) {
+  throw new Error(`no patches for DSH ${version}; supported: ${listVersions().join(', ') || '(none)'}`);
+}
+
+const manifestPath = path.join(process.cwd(), 'patches', 'manifest.json');
+let manifestEntry = null;
+if (fs.existsSync(manifestPath)) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifestEntry = manifest.versions?.[version];
+  if (!manifestEntry) throw new Error(`DSH ${version} is not listed in patches/manifest.json`);
+  if (manifestEntry.tested !== true) throw new Error(`DSH ${version} is listed but not marked tested; refusing to build`);
+}
+
+function listVersions() {
+  if (!fs.existsSync(path.join(process.cwd(), 'patches'))) return [];
+  return fs.readdirSync(path.join(process.cwd(), 'patches'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
 }
 
 const patches = fs.readdirSync(patchDir).filter((name) => name.endsWith('.patch')).sort();
@@ -110,6 +131,22 @@ try {
   }
   console.log(`packing ${output}`);
   await asar.createPackageFromStreams(output, [...dirs, ...files, ...links]);
+
+  function fileHash(archivePath) {
+    return createHash('sha256').update(asar.extractFile(output, archivePath)).digest('hex');
+  }
+  if (manifestEntry?.patchedMainSha256) {
+    const actual = fileHash('lib/main.js');
+    if (actual !== manifestEntry.patchedMainSha256) {
+      throw new Error(`patched lib/main.js hash mismatch: ${actual} != ${manifestEntry.patchedMainSha256}`);
+    }
+  }
+  if (manifestEntry?.patchedPreloadSha256) {
+    const actual = fileHash('lib/preload-app.cjs');
+    if (actual !== manifestEntry.patchedPreloadSha256) {
+      throw new Error(`patched lib/preload-app.cjs hash mismatch: ${actual} != ${manifestEntry.patchedPreloadSha256}`);
+    }
+  }
 
   const sha256 = createHash('sha256').update(fs.readFileSync(output)).digest('hex');
   const build = {
