@@ -1,5 +1,9 @@
 # DSH Sidecar Core
 
+> **Moved:** the canonical core patch now lives in the main plugin repository:
+> [dsh-sidecar-browser/core-patch](https://github.com/ccharlesjin/dsh-sidecar-browser/tree/main/core-patch).
+> This repository is kept read-only for historical reference.
+
 Version-specific optional **core patch** for
 [DSH Sidecar Browser](https://github.com/ccharlesjin/dsh-sidecar-browser).
 
